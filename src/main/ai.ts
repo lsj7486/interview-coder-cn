@@ -29,11 +29,28 @@ function createProvider() {
   })
 }
 
-function getModel(_settings: AppSettings) {
-  const fallbackModel = settings.apiBaseURL.includes('siliconflow')
-    ? 'Qwen/Qwen3-VL-32B-Instruct'
-    : 'gpt-5-mini'
-  return _settings.model || fallbackModel
+/**
+ * The model to send. The renderer owns model selection: its `lib/providers.ts`
+ * knows each platform's spelling of the same model and picks a default when the
+ * API Base URL changes, so this only runs when nothing was chosen at all — a
+ * `.env`-only setup, or a base URL the renderer does not recognize.
+ *
+ * Falling back to `gpt-5-mini` unconditionally is not safe: `@ai-sdk/openai`
+ * treats ids starting with `o` / `gpt-5` as reasoning models and writes the
+ * system message as a `developer` role, which third-party OpenAI-compatible
+ * services (DeepSeek and others) reject with a 400.
+ */
+function getModel(_settings: AppSettings): string {
+  if (_settings.model) return _settings.model
+
+  const baseURL = settings.apiBaseURL.toLowerCase()
+  if (baseURL.includes('siliconflow')) return 'Qwen/Qwen3-VL-32B-Instruct'
+  if (baseURL.includes('deepseek')) return 'deepseek-flash'
+  if (baseURL.includes('openrouter')) return 'openai/gpt-6-luna'
+  if (baseURL.includes('dashscope') || baseURL.includes('aliyuncs')) return 'qwen3-vl-plus'
+  if (!baseURL || baseURL.includes('openai.com')) return 'gpt-6-luna'
+
+  throw new Error(`未配置模型：请在设置中填入「${settings.apiBaseURL}」支持的视觉模型`)
 }
 
 export function getSolutionStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
