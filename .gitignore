@@ -11,3 +11,6 @@ dist
 
 # 开发期专用 Electron bundle（由 scripts/setup-dev-electron.mjs 生成）
 .electron-dev/
+
+# dev.command 记录后台进程 pid
+.dev.pid

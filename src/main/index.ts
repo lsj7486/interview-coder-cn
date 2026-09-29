@@ -26,7 +26,7 @@ process.on('uncaughtException', (error) => {
   if (isAbortError(error)) return
   console.error(error)
 })
-import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import './shortcuts'
 import './transcription'
 import './window-resize'
@@ -96,7 +96,11 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // Unregister all shortcuts when there is no window left
   globalShortcut.unregisterAll()
-  if (process.platform !== 'darwin') {
+  // In development there is no dock icon to come back from: dev.command runs an
+  // Electron patched with LSUIElement (see scripts/setup-dev-electron.mjs), so a
+  // window-less process can never be reached again — no dock tile, no window, and
+  // the shortcuts were just unregistered. Quit instead of leaving a zombie.
+  if (is.dev || process.platform !== 'darwin') {
     app.quit()
   }
 })
