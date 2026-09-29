@@ -1,4 +1,5 @@
 import { app, dialog, ipcMain } from 'electron'
+import { is } from '@electron-toolkit/utils'
 import type { CaptureRegion } from '../shared/capture-region'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
 
@@ -29,6 +30,17 @@ ipcMain.handle('updateAppSettings', (_event, _settings) => {
 /** Show/hide the macOS dock icon. No-op on other platforms. */
 export function applyDockVisibility(hidden: boolean): void {
   if (process.platform !== 'darwin') return
+
+  // Development always hides it, whatever the setting says: dev.command runs an
+  // Electron patched with LSUIElement (see scripts/setup-dev-electron.mjs), so the
+  // process starts out as an agent with no dock tile — and app.dock.show() would
+  // hand it a Foreground identity, creating the very icon that patch removes.
+  // hide() is kept as a fallback for when the patch did not get applied.
+  if (is.dev) {
+    app.dock?.hide()
+    return
+  }
+
   if (hidden) {
     app.dock?.hide()
   } else {

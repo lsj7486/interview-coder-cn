@@ -8,3 +8,6 @@ dist
 
 # 本地临时文件（上游对接资料，可随时删除）
 .local/
+
+# 开发期专用 Electron bundle（由 scripts/setup-dev-electron.mjs 生成）
+.electron-dev/
