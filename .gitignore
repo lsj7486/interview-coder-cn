@@ -5,3 +5,6 @@ dist
 .eslintcache
 *.log*
 .env*
+
+# 本地临时文件（上游对接资料，可随时删除）
+.local/

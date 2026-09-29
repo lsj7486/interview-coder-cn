@@ -34,7 +34,8 @@ dmg:
 npmRebuild: false
 publish:
   provider: github
-  owner: ooboqoo
+  # 指向自己的 fork；保持原作者的 owner 会让打 tag 发版时误往上游仓库发 Release
+  owner: lsj7486
   repo: interview-coder-cn
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
