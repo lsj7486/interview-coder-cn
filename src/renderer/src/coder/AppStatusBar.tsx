@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pointer, PointerOff, OctagonX, MessageCircle } from 'lucide-react'
 import { useSolutionStore } from '@/lib/store/solution'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
@@ -56,6 +56,18 @@ export function AppStatusBar() {
 
   // Check if there's an active conversation
   const hasActiveConversation = screenshotData && solutionChunks.length > 0
+
+  // The toolbar's follow-up button (and its shortcut) asks main to open this
+  // dialog remotely. Without a conversation there is nothing to follow up on —
+  // main would reject the question — so the click is dropped rather than
+  // opening a box whose submit silently does nothing
+  useEffect(() => {
+    window.api.onOpenFollowUp(() => {
+      if (!hasActiveConversation) return
+      setIsDialogOpen(true)
+    })
+    return () => window.api.removeOpenFollowUpListener()
+  }, [hasActiveConversation])
 
   return (
     <div className="absolute bottom-0 flex items-center justify-between w-full text-app-status-fg bg-app-status px-4 pb-1">

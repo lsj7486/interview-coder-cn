@@ -66,6 +66,8 @@ const api = {
       | 'clearTranscription'
       | 'pickCaptureRegion'
       | 'cycleScene'
+      | 'hideOrShowMainWindow'
+      | 'openFollowUp'
   ) => ipcRenderer.invoke('triggerAction', action),
   setToolbarVisible: (visible: boolean) => ipcRenderer.invoke('setToolbarVisible', visible),
   // Set click-through from the settings page; returns the state main ended up in
@@ -83,6 +85,17 @@ const api = {
   removeSyncToolbarSettingsListener: () => {
     ipcRenderer.removeAllListeners('sync-toolbar-settings')
   },
+  // Whether the toolbar is collapsed to its single restore button
+  onSyncToolbarCollapsed: (callback: (collapsed: boolean) => void) => {
+    ipcRenderer.on('sync-toolbar-collapsed', (_event, collapsed) => {
+      callback(collapsed)
+    })
+  },
+  removeSyncToolbarCollapsedListener: () => {
+    ipcRenderer.removeAllListeners('sync-toolbar-collapsed')
+  },
+  // Read the current collapse state, for renderers that mounted after the push
+  getToolbarCollapsed: () => ipcRenderer.invoke('getToolbarCollapsed') as Promise<boolean>,
 
   // Listen for window opacity adjustments triggered by shortcuts
   onAdjustOpacity: (callback: (delta: number) => void) => {
@@ -108,6 +121,14 @@ const api = {
   },
   removeCycleSceneListener: () => {
     ipcRenderer.removeAllListeners('cycle-scene')
+  },
+
+  // The toolbar or the shortcut asked to open the follow-up dialog
+  onOpenFollowUp: (callback: () => void) => {
+    ipcRenderer.on('open-follow-up', () => callback())
+  },
+  removeOpenFollowUpListener: () => {
+    ipcRenderer.removeAllListeners('open-follow-up')
   },
 
   // The active model refused 「关闭思考」, so its requests now go without it

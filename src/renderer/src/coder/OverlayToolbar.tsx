@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { Eye, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TOOLBAR_ACTIONS, type ToolbarActionName } from '@/lib/toolbar-actions'
-import type { LucideIcon } from 'lucide-react'
 import { WindowResizeHandles } from '@/components/WindowResizeHandles'
 import { applyTheme } from '@/lib/theme'
 import { useAppStore } from '@/lib/store/app'
@@ -10,6 +10,8 @@ import { useAppStore } from '@/lib/store/app'
 const BAR_PADDING = 8
 const BUTTON_SIZE = 28
 const BUTTON_GAP = 2
+/** Dwell of the restore button when hover triggering is switched off in settings */
+const DEFAULT_RESTORE_DWELL = 1000
 
 /**
  * Toolbar rendered in its own always-on-top window above the main window.
@@ -18,8 +20,9 @@ const BUTTON_GAP = 2
  */
 export function OverlayToolbar() {
   const [hoverDelay, setHoverDelay] = useState(0)
+  const [collapsed, setCollapsed] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
-  const visibleCount = useVisibleActionCount(barRef)
+  const visibleCount = useVisibleActionCount(barRef, collapsed)
   const syncAppState = useAppStore((state) => state.syncAppState)
 
   // This window's store is its own copy, so the state main pushes has to be
@@ -42,10 +45,25 @@ export function OverlayToolbar() {
       setHoverDelay(hoverDelay || 0)
       applyTheme(theme)
     })
+    // Collapsed while the main window is soft-hidden: the bar becomes one button.
+    // Read it once as well, because a push sent before this renderer started
+    // listening would leave the bar full-sized with every button cut off.
+    void window.api.getToolbarCollapsed().then(setCollapsed)
+    window.api.onSyncToolbarCollapsed((value) => {
+      setCollapsed(value)
+    })
     return () => {
       window.api.removeSyncToolbarSettingsListener()
+      window.api.removeSyncToolbarCollapsedListener()
     }
   }, [])
+
+  // While collapsed the bar is one button, and it is rendered no matter what the
+  // `showOverlayToolbar` setting says: the user may have switched the toolbar
+  // off, but hiding the window then has to leave them a way back.
+  if (collapsed) {
+    return <RestoreButton hoverDelay={hoverDelay} />
+  }
 
   return (
     <div ref={barRef} className="overlay-toolbar overlay-toolbar-root">
@@ -66,7 +84,10 @@ export function OverlayToolbar() {
  * sliver of a button. The bar's own width never depends on its children, so
  * measuring it here cannot feed back into the layout.
  */
-function useVisibleActionCount(barRef: RefObject<HTMLDivElement | null>): number {
+function useVisibleActionCount(
+  barRef: RefObject<HTMLDivElement | null>,
+  isCollapsed: boolean
+): number {
   const [count, setCount] = useState(TOOLBAR_ACTIONS.length)
 
   useEffect(() => {
@@ -83,7 +104,9 @@ function useVisibleActionCount(barRef: RefObject<HTMLDivElement | null>): number
     const observer = new ResizeObserver(measure)
     observer.observe(bar)
     return () => observer.disconnect()
-  }, [barRef])
+    // `isCollapsed` re-runs this when the bar comes back: the div (and with it
+    // the ref) is unmounted while collapsed, so the observer must be rebuilt
+  }, [barRef, isCollapsed])
 
   return count
 }
@@ -152,5 +175,61 @@ function ToolbarButton({
         <span className="dwell-progress" style={{ animationDuration: `${hoverDelay}ms` }} />
       )}
     </Button>
+  )
+}
+
+/**
+ * The whole bar while the main window is soft-hidden: hovering it long enough,
+ * or releasing a press on it, brings the window back. Hover firing stays on even
+ * when the user switched hover triggering off, because this is the mouse-only
+ * way home.
+ *
+ * Same asymmetry as ToolbarButton: Windows never delivers this window's
+ * button-down, so the restore has to hang off mouseup / hover, never `click`.
+ */
+function RestoreButton({ hoverDelay }: { hoverDelay: number }) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isDwelling, setIsDwelling] = useState(false)
+  const dwell = hoverDelay > 0 ? hoverDelay : DEFAULT_RESTORE_DWELL
+
+  const cancelDwell = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setIsDwelling(false)
+  }, [])
+
+  useEffect(() => cancelDwell, [cancelDwell, dwell])
+
+  const restore = () => {
+    cancelDwell()
+    void window.api.triggerAction('hideOrShowMainWindow')
+  }
+
+  return (
+    <div className="overlay-toolbar overlay-toolbar-root">
+      <Button
+        variant="ghost"
+        size="icon"
+        onMouseEnter={() => {
+          setIsDwelling(true)
+          timerRef.current = setTimeout(() => {
+            timerRef.current = null
+            restore()
+          }, dwell)
+        }}
+        onMouseLeave={cancelDwell}
+        onMouseUp={(event) => {
+          if (event.button !== 0) return
+          restore()
+        }}
+      >
+        <Eye />
+        {isDwelling && (
+          <span className="dwell-progress" style={{ animationDuration: `${dwell}ms` }} />
+        )}
+      </Button>
+    </div>
   )
 }

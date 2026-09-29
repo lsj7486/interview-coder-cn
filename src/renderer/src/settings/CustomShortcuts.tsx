@@ -102,6 +102,11 @@ export function CustomShortcuts() {
             shortcut="stopSolutionStream"
           />
           <Shortcut
+            label="追问问题"
+            description="打开追问输入框（需已有对话，等同悬浮工具条上的追问按钮）"
+            shortcut="openFollowUp"
+          />
+          <Shortcut
             label="上一个模型"
             description="切换到上一个已保存的 AI 配置"
             shortcut="previousApiProfile"

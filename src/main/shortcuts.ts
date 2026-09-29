@@ -4,8 +4,8 @@ import type { ModelMessage } from 'ai'
 import { applyContentProtection } from './main-window'
 import {
   showToolbar,
-  hideToolbar,
   setToolbarWanted,
+  setToolbarCollapsed,
   reassertToolbarTopMost,
   sendToToolbar
 } from './toolbar-window'
@@ -70,7 +70,7 @@ enum ShortcutStatus {
   Available = 'available'
 }
 
-const MOVE_STEP = 200
+const MOVE_STEP = 100
 /** Opacity delta per shortcut press, matching the settings slider step */
 const OPACITY_STEP = 0.05
 const shortcuts: Record<string, Shortcut> = {}
@@ -170,8 +170,10 @@ function softHideWindow(window: BrowserWindow) {
 
   window.setOpacity(0)
   window.setIgnoreMouseEvents(true)
+  // Collapse before moving: the toolbar tracks the main window's bounds, so
+  // parking the window first would drag the restore button off-screen too.
+  setToolbarCollapsed(true)
   window.setPosition(...getOffscreenPosition())
-  hideToolbar()
 }
 
 function restoreSoftHiddenWindow(window: BrowserWindow) {
@@ -185,7 +187,9 @@ function restoreSoftHiddenWindow(window: BrowserWindow) {
   softHiddenPosition = null
   // Not the raw preference: it stays suspended if this is the settings page
   applyIgnoreMouse()
-  showToolbar()
+  // Expanding is what brings the bar back: it re-glues to the window and shows
+  // itself again unless the user turned the toolbar off in the settings
+  setToolbarCollapsed(false)
   keepWindowInFront(window)
 }
 
@@ -740,6 +744,17 @@ const callbacks: Record<string, () => void> = {
     mainWindow.webContents.send('transcription-cleared')
   },
 
+  // The follow-up text box lives in the renderer; main only asks the main window
+  // to open its dialog.
+  openFollowUp: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    // Focus follows: the user is about to type into the dialog, and the textarea
+    // cannot take keystrokes while another app holds the focus.
+    mainWindow.focus()
+    mainWindow.webContents.send('open-follow-up')
+  },
+
   // Works on every page: it only sets up future screenshots
   pickCaptureRegion: () => {
     void pickRegion()
@@ -762,7 +777,12 @@ const clickableActions = new Set([
   'toggleTranscription',
   'clearTranscription',
   'pickCaptureRegion',
-  'cycleScene'
+  'cycleScene',
+  // The toolbar's hiding button collapses the bar into a restore button instead
+  // of vanishing with the window, so it is safe to expose there (see
+  // setToolbarCollapsed in toolbar-window.ts)
+  'hideOrShowMainWindow',
+  'openFollowUp'
 ])
 
 function unregisterShortcut(action: string) {

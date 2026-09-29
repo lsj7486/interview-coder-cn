@@ -76,6 +76,11 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     key: `${platformAlt}+.`,
     category: 'Screenshot & AI'
   },
+  openFollowUp: {
+    action: 'openFollowUp',
+    key: `${platformAlt}+Shift+F`,
+    category: 'Screenshot & AI'
+  },
   previousApiProfile: {
     action: 'previousApiProfile',
     key: `${platformAlt}+[`,

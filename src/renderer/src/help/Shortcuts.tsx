@@ -63,6 +63,7 @@ const getShortcutDescription = (action: string) => {
     appendScreenshot: '追加截图并生成解题建议',
     pickCaptureRegion: '框选截图区域（之后只截这块）',
     stopSolutionStream: '停止生成',
+    openFollowUp: '追问问题（打开追问输入框）',
     previousApiProfile: '切换到上一个 AI 配置',
     nextApiProfile: '切换到下一个 AI 配置',
     cycleScene: '切换到下一个提示词场景',
