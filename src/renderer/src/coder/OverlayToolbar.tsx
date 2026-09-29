@@ -14,6 +14,25 @@ const BUTTON_GAP = 2
 const DEFAULT_RESTORE_DWELL = 1000
 
 /**
+ * Timestamp of the last pointer move in this window, and how recent one has to
+ * be for a `mouseenter` to count as the cursor actually arriving.
+ *
+ * Hover dwell must never start on a `mouseenter` the browser invented. When the
+ * bar expands after a restore, Chromium re-runs hit testing and fires
+ * `mouseenter` on whatever button now sits under a cursor the user never moved —
+ * and the first button in the bar is 「截图解题」. A dwell later that button
+ * would fire itself, so restoring the window could silently take a screenshot.
+ * Requiring a move just before the enter rules that out: a cursor parked on the
+ * bar is not moving.
+ */
+let lastPointerMoveAt = 0
+const DWELL_MOVE_GRACE_MS = 250
+
+function didPointerJustMove(): boolean {
+  return Date.now() - lastPointerMoveAt <= DWELL_MOVE_GRACE_MS
+}
+
+/**
  * Toolbar rendered in its own always-on-top window above the main window.
  * Buttons carry no `title`: a native tooltip would be drawn outside the window
  * and would therefore not be covered by the window's content protection.
@@ -56,6 +75,16 @@ export function OverlayToolbar() {
       window.api.removeSyncToolbarSettingsListener()
       window.api.removeSyncToolbarCollapsedListener()
     }
+  }, [])
+
+  // Feeds didPointerJustMove() for both button kinds below; see lastPointerMoveAt
+  // for why the dwell timers need it.
+  useEffect(() => {
+    const onPointerMove = () => {
+      lastPointerMoveAt = Date.now()
+    }
+    window.addEventListener('pointermove', onPointerMove)
+    return () => window.removeEventListener('pointermove', onPointerMove)
   }, [])
 
   // While collapsed the bar is one button, and it is rendered no matter what the
@@ -148,6 +177,8 @@ function ToolbarButton({
 
   const handleMouseEnter = () => {
     if (!hoverDelay) return
+    // Not a real arrival: the bar just re-laid-out under a stationary cursor
+    if (!didPointerJustMove()) return
     setIsDwelling(true)
     timerRef.current = setTimeout(() => {
       timerRef.current = null
@@ -213,6 +244,7 @@ function RestoreButton({ hoverDelay }: { hoverDelay: number }) {
         variant="ghost"
         size="icon"
         onMouseEnter={() => {
+          if (!didPointerJustMove()) return
           setIsDwelling(true)
           timerRef.current = setTimeout(() => {
             timerRef.current = null
