@@ -1,0 +1,11 @@
+# 统一按 LF 存储。上游仓库本身是 LF，但这份拷贝在传输过程中被转成了 CRLF；
+# 没有这条规则时，git 会认为全仓库 80+ 个文件都被改动过，真实改动会被淹没。
+# 同时 Prettier 未设 endOfLine（默认为 lf），与本规则一致。
+* text=auto eol=lf
+
+# 二进制文件不做换行符转换
+*.png  binary
+*.ico  binary
+*.icns binary
+*.dmg  binary
+*.exe  binary
