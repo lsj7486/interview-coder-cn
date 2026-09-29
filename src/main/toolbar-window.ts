@@ -1,10 +1,13 @@
 import { join } from 'node:path'
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, ipcMain, screen } from 'electron'
 import { is } from '@electron-toolkit/utils'
 
-const TOOLBAR_WIDTH = 404
+/** Wide enough for every TOOLBAR_ACTIONS button; the bar hides the ones that no longer fit */
+const TOOLBAR_WIDTH = 494
 const TOOLBAR_HEIGHT = 44
 const TOOLBAR_INSET = 4
+/** One button plus the bar's own padding: the width while collapsed */
+const COLLAPSED_WIDTH = 44
 /** Mirrors the renderer's default opacity setting, until the renderer syncs the real one */
 const DEFAULT_OPACITY = 0.8
 
@@ -12,6 +15,11 @@ let toolbarWindow: BrowserWindow | null = null
 let ownerWindow: BrowserWindow | null = null
 /** Whether the renderer wants the toolbar on screen (main page + enabled in settings) */
 let isToolbarWanted = false
+/**
+ * Collapsed to a single restore button. Set while the main window is soft-hidden
+ * (parked off-screen), where that button is the only mouse-only way back.
+ */
+let isCollapsed = false
 let toolbarOpacity = DEFAULT_OPACITY
 /**
  * The size the user dragged the toolbar to, tracked here instead of being read
@@ -57,6 +65,14 @@ export function createToolbarWindow(parent: BrowserWindow): void {
   toolbarWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   toolbarWindow.setContentProtection(true)
 
+  // The collapsed flag is pushed rather than stored in the renderer's own
+  // settings copy, so a renderer that loads (or reloads) later has to be told
+  // where it stands.
+  toolbarWindow.webContents.on('did-finish-load', () => {
+    if (!toolbarWindow || toolbarWindow.isDestroyed()) return
+    toolbarWindow.webContents.send('sync-toolbar-collapsed', isCollapsed)
+  })
+
   parent.on('move', syncToolbarBounds)
   parent.on('resize', syncToolbarBounds)
   parent.on('show', showToolbar)
@@ -78,6 +94,9 @@ export function createToolbarWindow(parent: BrowserWindow): void {
 function syncToolbarBounds(): void {
   if (!toolbarWindow || toolbarWindow.isDestroyed()) return
   if (!ownerWindow || ownerWindow.isDestroyed()) return
+  // Collapsed: the main window is parked off-screen, so following it would drag
+  // the restore button along. Stay where the bar was when it collapsed.
+  if (isCollapsed) return
 
   const mainBounds = ownerWindow.getBounds()
   const workArea = screen.getDisplayMatching(mainBounds).workArea
@@ -122,10 +141,49 @@ export function noteToolbarResize(window: BrowserWindow, width: number, height: 
  */
 export function setToolbarWanted(wanted: boolean): void {
   isToolbarWanted = wanted
+  // Collapsed wins: the restore button has to stay reachable
+  if (isCollapsed) return
   if (wanted) {
     showToolbar()
   } else {
     hideToolbar()
+  }
+}
+
+/**
+ * Shrink the bar down to a single restore button, or expand it back.
+ *
+ * The main window is soft-hidden by parking it off-screen, and this window is
+ * glued to its bounds — so the button must be frozen in place and shown even
+ * when the user turned the toolbar off. Otherwise hiding the window with the
+ * mouse (instead of the shortcut) would strand it where nothing can reach it.
+ */
+export function setToolbarCollapsed(collapsed: boolean): void {
+  // Push even when the flag did not change. A renderer that missed the previous
+  // push (reload, or a load that had not finished yet) would otherwise keep
+  // drawing the full bar while the window is sized for one button — which leaves
+  // the toolbar looking empty.
+  if (toolbarWindow && !toolbarWindow.isDestroyed()) {
+    toolbarWindow.webContents.send('sync-toolbar-collapsed', collapsed)
+  }
+  if (isCollapsed === collapsed) return
+  isCollapsed = collapsed
+  if (!toolbarWindow || toolbarWindow.isDestroyed()) return
+
+  const bounds = toolbarWindow.getBounds()
+  toolbarWindow.setBounds({
+    x: bounds.x,
+    y: bounds.y,
+    width: collapsed ? COLLAPSED_WIDTH : toolbarSize.width,
+    height: bounds.height
+  })
+
+  if (collapsed) {
+    toolbarWindow.showInactive()
+  } else if (!isToolbarWanted) {
+    hideToolbar()
+  } else {
+    syncToolbarBounds()
   }
 }
 
@@ -155,3 +213,6 @@ export function reassertToolbarTopMost(level: number, aggressive: boolean): void
   toolbarWindow.setAlwaysOnTop(true, 'screen-saver', level)
   if (aggressive) toolbarWindow.moveTop()
 }
+
+/** The toolbar renderer reads this on mount: a push can arrive before it listens */
+ipcMain.handle('getToolbarCollapsed', () => isCollapsed)

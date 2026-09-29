@@ -10,6 +10,8 @@ export interface PromptScene {
   name: string
   prompt: string
   isPreset: boolean
+  /** Hidden scenes keep their prompt but are skipped by the scene switchers */
+  hidden?: boolean
 }
 
 export const CODING_SCENE_ID = 'coding'
@@ -55,6 +57,16 @@ function composeCustomPrompt(scenes: PromptScene[], activeSceneId: string): stri
   if (!scene) return PRESET_SCENE_PROMPTS[CODING_SCENE_ID]
   // An emptied preset scene falls back to its default prompt
   return scene.prompt.trim() || PRESET_SCENE_PROMPTS[scene.id] || ''
+}
+
+/**
+ * Scenes offered by the switchers (status bar picker, toolbar cycle button and
+ * the matching shortcut). Hidden scenes are skipped, but never all of them: if
+ * everything was hidden the full list is returned so the switchers keep working.
+ */
+export function pickVisibleScenes(scenes: PromptScene[]): PromptScene[] {
+  const visible = scenes.filter((scene) => !scene.hidden)
+  return visible.length ? visible : scenes
 }
 
 /** How captured screenshots are shown on the main page, ordered by how much room they take */
@@ -103,6 +115,8 @@ interface SettingsStore extends Settings {
   syncSettings: (settings: Partial<Settings>) => void
   setActiveScene: (id: string) => void
   updateScenePrompt: (id: string, prompt: string) => void
+  /** Hide or show a scene without deleting it */
+  setSceneHidden: (id: string, hidden: boolean) => void
   addScene: (name: string) => string
   removeScene: (id: string) => void
 }
@@ -161,6 +175,23 @@ export const useSettingsStore = create<SettingsStore>()(
           return {
             scenes,
             customPrompt: composeCustomPrompt(scenes, state.activeSceneId)
+          }
+        })
+      },
+      setSceneHidden: (id, hidden) => {
+        set((state) => {
+          const scenes = state.scenes.map((s) => (s.id === id ? { ...s, hidden } : s))
+          // Hiding the active scene would leave the switchers without a
+          // selection, so fall back to the first scene still visible.
+          let activeSceneId = state.activeSceneId
+          if (hidden && activeSceneId === id) {
+            const fallback = scenes.find((s) => !s.hidden)
+            activeSceneId = fallback ? fallback.id : CODING_SCENE_ID
+          }
+          return {
+            scenes,
+            activeSceneId,
+            customPrompt: composeCustomPrompt(scenes, activeSceneId)
           }
         })
       },
@@ -226,8 +257,10 @@ export const useSettingsStore = create<SettingsStore>()(
         state.scenes = [
           ...createPresetScenes().map((p) => {
             const saved = persistedScenes.find((s) => s.id === p.id)
-            // Restore the default prompt if a preset scene was left empty
-            return saved?.prompt.trim() ? saved : p
+            if (!saved) return p
+            // Restore the default prompt if a preset scene was left empty, while
+            // keeping the user's other fields (such as `hidden`)
+            return { ...saved, prompt: saved.prompt.trim() ? saved.prompt : p.prompt }
           }),
           ...persistedScenes.filter((s) => !s.isPreset)
         ]

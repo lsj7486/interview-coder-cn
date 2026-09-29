@@ -4,8 +4,8 @@ import type { ModelMessage } from 'ai'
 import { applyContentProtection } from './main-window'
 import {
   showToolbar,
-  hideToolbar,
   setToolbarWanted,
+  setToolbarCollapsed,
   reassertToolbarTopMost
 } from './toolbar-window'
 import { takeScreenshot } from './take-screenshot'
@@ -66,7 +66,8 @@ enum ShortcutStatus {
   Available = 'available'
 }
 
-const MOVE_STEP = 200
+/** Pixels the move shortcuts shift the window by, per press */
+const MOVE_STEP = 100
 /** Opacity delta per shortcut press, matching the settings slider step */
 const OPACITY_STEP = 0.05
 const shortcuts: Record<string, Shortcut> = {}
@@ -166,8 +167,10 @@ function softHideWindow(window: BrowserWindow) {
 
   window.setOpacity(0)
   window.setIgnoreMouseEvents(true)
+  // Collapse before moving: the toolbar tracks the main window's bounds, so
+  // parking the window first would drag the restore button off-screen too.
+  setToolbarCollapsed(true)
   window.setPosition(...getOffscreenPosition())
-  hideToolbar()
 }
 
 function restoreSoftHiddenWindow(window: BrowserWindow) {
@@ -180,6 +183,7 @@ function restoreSoftHiddenWindow(window: BrowserWindow) {
 
   isWindowSoftHidden = false
   softHiddenPosition = null
+  setToolbarCollapsed(false)
   showToolbar()
   keepWindowInFront(window)
 }
@@ -582,6 +586,25 @@ const callbacks: Record<string, () => void> = {
     if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
     clearTranscriptionText()
     mainWindow.webContents.send('transcription-cleared')
+  },
+
+  // The scene list lives in the renderer's settings store, so main only asks the
+  // main window to advance to the next scene instead of deciding it here.
+  cycleScene: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    mainWindow.webContents.send('cycle-scene')
+  },
+
+  // The follow-up text box lives in the renderer; main only asks the main window
+  // to open its dialog.
+  openFollowUp: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    // Focus follows: the user is about to type into the dialog, and the textarea
+    // cannot take keystrokes while another app holds the focus.
+    mainWindow.focus()
+    mainWindow.webContents.send('open-follow-up')
   }
 }
 
@@ -599,7 +622,10 @@ const clickableActions = new Set([
   'moveMainWindowLeft',
   'moveMainWindowRight',
   'toggleTranscription',
-  'clearTranscription'
+  'clearTranscription',
+  'cycleScene',
+  'hideOrShowMainWindow',
+  'openFollowUp'
 ])
 
 function unregisterShortcut(action: string) {

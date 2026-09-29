@@ -108,6 +108,11 @@ export function CustomShortcuts() {
             shortcut="clearTranscription"
             disabled={!dashscopeApiKey}
           />
+          <Shortcut
+            label="切换解题场景"
+            description="循环切换到下一个解题场景（等同悬浮工具条上的切换按钮）"
+            shortcut="cycleScene"
+          />
         </div>
 
         {/* Navigation */}

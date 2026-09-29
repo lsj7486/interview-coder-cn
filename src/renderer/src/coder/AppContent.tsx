@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Images } from 'lucide-react'
 import { useSettingsStore, type ScreenshotDisplay } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
@@ -7,6 +7,8 @@ import MarkdownRenderer from '@/components/MarkdownRenderer'
 import ShortcutRenderer from '@/components/ShortcutRenderer'
 
 const SCROLL_OFFSET = 120
+/** How close to the bottom the view must be to keep following streamed output */
+const FOLLOW_THRESHOLD = 32
 
 export function AppContent() {
   const {
@@ -25,6 +27,14 @@ export function AppContent() {
   const [recentScreenshots, setRecentScreenshots] = useState<string[]>([])
   // Main keeps only the last 5 thumbnails, but every screenshot went to the AI
   const [screenshotTotal, setScreenshotTotal] = useState(0)
+
+  const contentRef = useRef<HTMLDivElement>(null)
+  /**
+   * Whether the view is parked at the bottom. Streamed output scrolls itself
+   * into view only while this holds, so reading back through a long answer is
+   * not yanked away by the next chunk.
+   */
+  const followOutput = useRef(true)
 
   useEffect(() => {
     // Listen for screenshot events (latest)
@@ -45,6 +55,7 @@ export function AppContent() {
       setScreenshotTotal(0)
       setScreenshotData(null)
       setErrorMessage(null)
+      followOutput.current = true
     })
 
     // Listen for solution chunks
@@ -118,13 +129,37 @@ export function AppContent() {
     }
   }, [])
 
+  // A manual scroll — the page-up/down shortcuts included — decides whether the
+  // stream keeps following or leaves the view where the reader put it
+  useEffect(() => {
+    const container = contentRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+      followOutput.current = distanceToBottom <= FOLLOW_THRESHOLD
+    }
+
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // No dependency array on purpose: every re-render is a chance that the answer
+  // grew, and writing the same scroll position again is a no-op
+  useEffect(() => {
+    const container = contentRef.current
+    if (container && followOutput.current) {
+      container.scrollTop = container.scrollHeight
+    }
+  })
+
   // `screenshots-updated` always accompanies `screenshot-taken`; the fallback only
   // covers a render that lands between the two
   const screenshots =
     recentScreenshots.length > 0 ? recentScreenshots : screenshotData ? [screenshotData] : []
 
   return (
-    <div id="app-content" className="px-6 py-4">
+    <div id="app-content" ref={contentRef} className="px-6 py-4">
       {/* Error Banner */}
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start gap-3">

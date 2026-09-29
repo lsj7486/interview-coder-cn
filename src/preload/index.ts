@@ -57,6 +57,9 @@ const api = {
       | 'moveMainWindowRight'
       | 'toggleTranscription'
       | 'clearTranscription'
+      | 'cycleScene'
+      | 'hideOrShowMainWindow'
+      | 'openFollowUp'
   ) => ipcRenderer.invoke('triggerAction', action),
   setToolbarVisible: (visible: boolean) => ipcRenderer.invoke('setToolbarVisible', visible),
 
@@ -69,6 +72,17 @@ const api = {
   removeSyncToolbarSettingsListener: () => {
     ipcRenderer.removeAllListeners('sync-toolbar-settings')
   },
+  // Whether the toolbar is collapsed to its single restore button
+  onSyncToolbarCollapsed: (callback: (collapsed: boolean) => void) => {
+    ipcRenderer.on('sync-toolbar-collapsed', (_event, collapsed) => {
+      callback(collapsed)
+    })
+  },
+  removeSyncToolbarCollapsedListener: () => {
+    ipcRenderer.removeAllListeners('sync-toolbar-collapsed')
+  },
+  // Read the current collapse state, for renderers that mounted after the push
+  getToolbarCollapsed: () => ipcRenderer.invoke('getToolbarCollapsed') as Promise<boolean>,
 
   // Listen for window opacity adjustments triggered by shortcuts
   onAdjustOpacity: (callback: (delta: number) => void) => {
@@ -221,6 +235,22 @@ const api = {
   },
   removeTranscriptionClearedListener: () => {
     ipcRenderer.removeAllListeners('transcription-cleared')
+  },
+
+  // Ask the main window to advance to the next prompt scene (toolbar button / shortcut)
+  onCycleScene: (callback: () => void) => {
+    ipcRenderer.on('cycle-scene', callback)
+  },
+  removeCycleSceneListener: () => {
+    ipcRenderer.removeAllListeners('cycle-scene')
+  },
+
+  // Ask the main window to open its follow-up dialog (toolbar button)
+  onOpenFollowUp: (callback: () => void) => {
+    ipcRenderer.on('open-follow-up', callback)
+  },
+  removeOpenFollowUpListener: () => {
+    ipcRenderer.removeAllListeners('open-follow-up')
   }
 }
 

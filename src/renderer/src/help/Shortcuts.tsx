@@ -64,6 +64,7 @@ const getShortcutDescription = (action: string) => {
     stopSolutionStream: '停止生成',
     toggleTranscription: '开始/暂停实时语音转录',
     clearTranscription: '清除转录文本（不提交给AI）',
+    cycleScene: '循环切换解题场景',
     pageUp: '向上翻页',
     pageDown: '向下翻页',
     moveMainWindowUp: '向上移动窗口',

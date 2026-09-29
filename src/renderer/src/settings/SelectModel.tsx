@@ -109,7 +109,10 @@ export function SelectModel({
                   <CommandItem
                     value={m.value}
                     onSelect={(current) => {
-                      onChange?.(current === value ? '' : current)
+                      // 刻意不提供「再次点击已选项即清空」的行为：模型一旦为空
+                      // 就会退回到兜底模型，在第三方 API 上会直接报错。
+                      // 需要清空时请用自定义模型右侧的删除按钮。
+                      onChange?.(current)
                       setSearchValue('')
                       setOpen(false)
                     }}

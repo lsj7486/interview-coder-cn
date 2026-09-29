@@ -69,6 +69,7 @@ export default function SettingsPage() {
     updateSetting,
     setActiveScene,
     updateScenePrompt,
+    setSceneHidden,
     addScene,
     removeScene
   } = useSettingsStore()
@@ -304,7 +305,8 @@ export default function SettingsPage() {
               <label className="text-sm font-medium">
                 使用场景
                 <span className="ml-2 text-xs font-light">
-                  选择场景后可编辑对应的系统提示词，修改会自动保存；也可新增自己的场景
+                  选择场景后可编辑对应的系统提示词，修改会自动保存；也可新增自己的场景。
+                  悬停标签可点眼睛图标隐藏它（提示词保留，但不出现在场景切换器中）
                 </span>
               </label>
               <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -315,13 +317,35 @@ export default function SettingsPage() {
                       'group flex items-center rounded-full border text-sm transition-colors cursor-pointer select-none',
                       scene.id === activeSceneId
                         ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'bg-white border-gray-300 hover:border-blue-400'
+                        : 'bg-white border-gray-300 hover:border-blue-400',
+                      scene.hidden && 'opacity-50'
                     )}
                     onClick={() => setActiveScene(scene.id)}
                   >
-                    <span className={cn('py-1 pl-3', scene.isPreset ? 'pr-3' : 'pr-1')}>
-                      {scene.name}
-                    </span>
+                    <span className="py-1 pl-3 pr-1">{scene.name}</span>
+                    <button
+                      className={cn(
+                        'p-0.5 rounded-full hover:bg-black/10',
+                        scene.hidden
+                          ? 'opacity-70 hover:opacity-100'
+                          : 'opacity-0 group-hover:opacity-60 hover:opacity-100'
+                      )}
+                      title={
+                        scene.hidden
+                          ? '取消隐藏，让它重新出现在场景切换器中'
+                          : '隐藏该场景：不删除提示词，但不出现在场景切换器中'
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSceneHidden(scene.id, !scene.hidden)
+                      }}
+                    >
+                      {scene.hidden ? (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                    </button>
                     {!scene.isPreset && (
                       <button
                         className="mr-1.5 p-0.5 rounded-full opacity-60 hover:opacity-100 hover:bg-black/10"

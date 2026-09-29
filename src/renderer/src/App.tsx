@@ -5,7 +5,7 @@ import CoderPage from '@/coder'
 import SettingsPage from '@/settings'
 import HelpPage from '@/help'
 import { OverlayToolbar } from '@/coder/OverlayToolbar'
-import { useSettingsStore } from '@/lib/store/settings'
+import { useSettingsStore, pickVisibleScenes } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { getCloneableFields } from '@/lib/utils'
 import { WindowResizeHandles } from '@/components/WindowResizeHandles'
@@ -39,6 +39,22 @@ export default function App() {
       window.api.updateAppSettings(getCloneableFields(settingsStore))
     }
   }, [initialized, settingsStore])
+
+  // The overlay toolbar button and the global shortcut both ask main to advance
+  // the scene; the scene list only lives in this window, so the switch happens here.
+  // No toast: the active scene is already on display in the status bar, and a
+  // popup in the corner is noise when the toolbar button is hover-triggered.
+  useEffect(() => {
+    window.api.onCycleScene(() => {
+      const { scenes, activeSceneId, setActiveScene } = useSettingsStore.getState()
+      const visibleScenes = pickVisibleScenes(scenes)
+      if (visibleScenes.length === 0) return
+      const currentIndex = visibleScenes.findIndex((scene) => scene.id === activeSceneId)
+      const nextScene = visibleScenes[(currentIndex + 1) % visibleScenes.length]
+      setActiveScene(nextScene.id)
+    })
+    return () => window.api.removeCycleSceneListener()
+  }, [])
 
   useEffect(() => {
     console.log('App initShortcuts:', shortcuts) // DEBUG: 检查新键

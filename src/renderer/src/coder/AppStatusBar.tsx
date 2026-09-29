@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { Pointer, PointerOff, OctagonX, MessageCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Pointer, PointerOff, OctagonX, MessageCircle, Layers } from 'lucide-react'
 import { useSolutionStore } from '@/lib/store/solution'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useAppStore } from '@/lib/store/app'
+import { useSettingsStore, pickVisibleScenes } from '@/lib/store/settings'
 import ShortcutRenderer from '@/components/ShortcutRenderer'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 
 export function AppStatusBar() {
@@ -17,6 +19,8 @@ export function AppStatusBar() {
   } = useSolutionStore()
   const { ignoreMouse } = useAppStore()
   const { shortcuts } = useShortcutsStore()
+  const { scenes, activeSceneId, setActiveScene } = useSettingsStore()
+  const visibleScenes = pickVisibleScenes(scenes)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [questionInput, setQuestionInput] = useState('')
 
@@ -52,6 +56,15 @@ export function AppStatusBar() {
 
   // Check if there's an active conversation
   const hasActiveConversation = screenshotData && solutionChunks.length > 0
+
+  // The toolbar's follow-up button asks main to open this dialog remotely
+  useEffect(() => {
+    window.api.onOpenFollowUp(() => {
+      if (!hasActiveConversation) return
+      setIsDialogOpen(true)
+    })
+    return () => window.api.removeOpenFollowUpListener()
+  }, [hasActiveConversation])
 
   return (
     <div className="absolute bottom-0 flex items-center justify-between w-full text-blue-100 bg-gray-600/10 px-4 pb-1">
@@ -95,6 +108,23 @@ export function AppStatusBar() {
         ) : null}
       </div>
       <div className="flex items-center space-x-4 select-none">
+        {/* Prompt scene switcher */}
+        <Select value={activeSceneId} onValueChange={(id) => setActiveScene(id)}>
+          <SelectTrigger
+            size="sm"
+            className="h-7 w-auto gap-1 border-blue-100/30 bg-white/5 px-2 text-xs text-blue-100 hover:bg-white/15 [&_svg]:text-blue-100 [&_svg]:opacity-70"
+          >
+            <Layers className="size-3.5 shrink-0" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {visibleScenes.map((scene) => (
+              <SelectItem key={scene.id} value={scene.id}>
+                {scene.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {/* Follow-up Question Button */}
         {hasActiveConversation && !isReceivingSolution && (
           <Button
@@ -133,13 +163,16 @@ export function AppStatusBar() {
         <DialogContent>
           <div className="py-4">
             <Textarea
-              placeholder="请输入追问内容，按 Ctrl+Enter 提交..."
+              placeholder="请输入追问内容，Enter 发送，Shift+Enter 换行..."
               value={questionInput}
               className="min-h-24"
               onChange={(e) => setQuestionInput(e.target.value)}
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                // Enter sends, Shift+Enter keeps the newline. `isComposing` guards
+                // the IME: confirming a Chinese candidate also fires Enter, and
+                // sending there would submit half a sentence.
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
                   handleSubmitQuestion()
                 }

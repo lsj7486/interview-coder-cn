@@ -8,11 +8,21 @@ function getSystemPrompt(extra?: string) {
   return [settings.customPrompt, extra].filter(Boolean).join('\n\n') || undefined
 }
 
-function getModel(_settings: AppSettings) {
-  const fallbackModel = settings.apiBaseURL.includes('siliconflow')
-    ? 'Qwen/Qwen3-VL-32B-Instruct'
-    : 'gpt-5-mini'
-  return _settings.model || fallbackModel
+function getModel(_settings: AppSettings): string {
+  if (_settings.model) return _settings.model
+
+  // 用户没选模型时，按 API 服务商推断一个默认值。
+  // 不能无条件回退到 gpt-5-mini：@ai-sdk/openai 会把以 `o` / `gpt-5` 开头的模型
+  // 当成 reasoning 模型，并把 system 消息写成 `developer` role，第三方 OpenAI
+  // 兼容服务（DeepSeek 等）不认识该 role，会直接返回 400。
+  const baseURL = settings.apiBaseURL.toLowerCase()
+  if (baseURL.includes('siliconflow')) return 'Qwen/Qwen3-VL-32B-Instruct'
+  if (baseURL.includes('deepseek')) return 'deepseek-flash'
+  if (baseURL.includes('openrouter')) return 'qwen/qwen3-vl-32b-instruct'
+  if (baseURL.includes('dashscope') || baseURL.includes('aliyuncs')) return 'qwen3-vl-plus'
+  if (!baseURL || baseURL.includes('openai.com')) return 'gpt-5-mini'
+
+  throw new Error(`未配置模型：请在设置中填入「${settings.apiBaseURL}」支持的视觉模型`)
 }
 
 export function getSolutionStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
